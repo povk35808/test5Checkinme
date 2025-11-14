@@ -38,7 +38,7 @@ let modelsLoaded = false;
 let currentUserFaceMatcher = null;
 let currentScanAction = null; // 'checkIn' or 'checkOut'
 let videoStream = null;
-const FACE_MATCH_THRESHOLD = 0.5; // 50% match (Distance 0.5)
+const FACE_MATCH_THRESHOLD = 0.3; // 70% match (Distance 0.3)
 
 // --- << ថ្មី: Map សម្រាប់បកប្រែ Duration ជាអក្សរខ្មែរ >> ---
 const durationMap = {
@@ -157,6 +157,9 @@ const cameraCloseButton = document.getElementById("cameraCloseButton");
 const cameraLoadingText = document.getElementById("cameraLoadingText");
 const cameraHelpText = document.getElementById("cameraHelpText");
 const captureButton = document.getElementById("captureButton");
+
+// --- *** ថ្មី: ប៊ូតុង Login *** ---
+const employeeLoginButton = document.getElementById("employeeLoginButton");
 
 const employeeListHeader = document.getElementById("employeeListHeader");
 const employeeListHelpText = document.getElementById("employeeListHelpText");
@@ -424,7 +427,6 @@ function isInsideArea(lat, lon) {
 
 // --- AI & Camera Functions ---
 
-// --- *** ថ្មី: រក្សាទុក Model ទាំងអស់ (Accuracy + Liveness) *** ---
 async function loadAIModels() {
   const MODEL_URL = "./models";
   loadingText.textContent = "កំពុងទាញយក AI Models (1/4)...";
@@ -460,7 +462,6 @@ async function loadAIModels() {
     );
   }
 }
-// --- ********************************************************** ---
 
 async function prepareFaceMatcher(imageUrl) {
   currentUserFaceMatcher = null;
@@ -667,7 +668,6 @@ async function checkFullLeaveStatus(employeeId, checkType) {
   }
 }
 
-// --- *** ថ្មី: កែប្រែ Function នេះ (ត្រឡប់ទៅប្រើប៊ូតុងថតវិញ) *** ---
 async function startFaceScan(action) {
   currentScanAction = action;
 
@@ -743,7 +743,6 @@ async function startFaceScan(action) {
     videoElement.srcObject = videoStream;
 
     videoElement.onplay = () => {
-      // --- ថ្មី: បង្ហាញប៊ូតុង ហើយប្រាប់ឱ្យញញឹម ---
       cameraLoadingText.textContent = "ត្រៀមរួចរាល់";
       cameraHelpText.textContent =
         "សូមដាក់មុខឱ្យចំ, ញញឹម 😊, រួចចុចប៊ូតុងថត";
@@ -759,7 +758,6 @@ async function startFaceScan(action) {
     hideCameraModal();
   }
 }
-// --- ********************************************************** ---
 
 function stopCamera() {
   if (videoStream) {
@@ -778,7 +776,6 @@ function hideCameraModal() {
     .clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
 }
 
-// --- *** ថ្មី: ជំនួស Function នេះ (Capture, Smile Check, Match Check) *** ---
 async function handleCaptureAndAnalyze() {
   if (!videoStream) return;
 
@@ -862,7 +859,6 @@ async function handleCaptureAndAnalyze() {
     captureButton.disabled = false;
   }
 }
-// --- ********************************************************** ---
 
 // --- Main Functions ---
 
@@ -976,7 +972,10 @@ async function fetchGoogleSheetData() {
       .filter((emp) => emp.group !== "បុគ្គលិក");
 
     console.log(`Loaded ${allEmployees.length} employees (Filtered).`);
-    renderEmployeeList(allEmployees);
+    
+    // យើងលែងត្រូវការបង្ហាញបញ្ជីទៀតហើយ តែ Function នេះនៅតែត្រូវហៅ
+    // ដើម្បីឱ្យ Search ដំណើរការ
+    renderEmployeeList(allEmployees); 
 
     const savedEmployeeId = localStorage.getItem("savedEmployeeId");
     if (savedEmployeeId) {
@@ -1005,9 +1004,11 @@ async function fetchGoogleSheetData() {
   }
 }
 
+// Function នេះនៅតែត្រូវប្រើ ដើម្បីផ្ទុកទិន្នន័យចូលក្នុង List Container
+// ទោះបីជាវាមិនត្រូវបានបង្ហាញ (hidden) ក៏ដោយ
 function renderEmployeeList(employees) {
   employeeListContainer.innerHTML = "";
-  employeeListContainer.classList.remove("hidden");
+  // employeeListContainer.classList.remove("hidden"); // << មិនបាច់បង្ហាញទេ
 
   if (employees.length === 0) {
     employeeListContainer.innerHTML = `<p class="text-center text-gray-500 p-3">រកមិនឃើញបុគ្គលិក (IT Support) ទេ។</p>`;
@@ -1104,8 +1105,8 @@ async function selectUser(employee) {
 
   prepareFaceMatcher(employee.photoUrl);
 
-  employeeListContainer.classList.add("hidden");
-  searchInput.value = "";
+  employeeListContainer.classList.add("hidden"); // លាក់ List វិញ
+  searchInput.value = ""; // សម្អាតប្រអប់ Search
 }
 
 function logout() {
@@ -1191,7 +1192,7 @@ function forceLogout(message) {
   modalConfirmButton.textContent = "យល់ព្រម";
   modalConfirmButton.className =
     "w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 col-span-2";
-modalCancelButton.style.display = "none";
+  modalCancelButton.style.display = "none";
 
   currentConfirmCallback = () => {
     hideMessage();
@@ -1603,31 +1604,51 @@ function formatTime(date) {
 
 // --- Event Listeners ---
 
-searchInput.addEventListener("input", (e) => {
-  const searchTerm = e.target.value.toLowerCase();
-  const filteredEmployees = allEmployees.filter(
-    (emp) =>
-      emp.name.toLowerCase().includes(searchTerm) ||
-      emp.id.toLowerCase().includes(searchTerm)
+// --- *** ថ្មី: ជំនួស Event Listeners ចាស់របស់ searchInput *** ---
+
+// 1. បន្ថែម Event Listener សម្រាប់ប៊ូតុង Login ថ្មី
+employeeLoginButton.addEventListener("click", () => {
+  const searchTerm = searchInput.value.trim().toLowerCase();
+
+  if (!searchTerm) {
+    showMessage("ទិន្នន័យទទេ", "សូមវាយអត្តលេខ ឬឈ្មោះរបស់អ្នកជាមុនសិន។", true);
+    return;
+  }
+
+  // ជំហានទី១: ស្វែងរកអត្តលេខ (ID) ដែលตรงกันពិតប្រាកដ (Exact Match)
+  let foundEmployee = allEmployees.find(
+    (emp) => emp.id.trim().toLowerCase() === searchTerm
   );
-  renderEmployeeList(filteredEmployees);
+
+  // ជំហានទី២: បើរក ID មិនឃើញ, ស្វែងរកឈ្មោះ (Name) ដែលตรงกันពិតប្រាកដ
+  if (!foundEmployee) {
+    foundEmployee = allEmployees.find(
+      (emp) => emp.name.trim().toLowerCase() === searchTerm
+    );
+  }
+
+  // ជំហានទី៣: ពិនិត្យលទ្ធផល
+  if (foundEmployee) {
+    selectUser(foundEmployee); // ជោគជ័យ! ចូលប្រព័ន្ធ
+  } else {
+    // រកមិនឃើញ
+    showMessage(
+      "រកមិនឃើញ",
+      "មិនមានគណនីនេះទេ។ សូមពិនិត្យអត្តលេខ ឬឈ្មោះរបស់អ្នកឡើងវិញ។",
+      true
+    );
+  }
 });
 
-searchInput.addEventListener("focus", () => {
-  employeeListHeader.style.display = "none";
-  employeeListHelpText.style.display = "none";
-  employeeListContent.style.paddingTop = "1.5rem";
-  renderEmployeeList(allEmployees);
+// 2. បន្ថែមមុខងារចុច "Enter" លើប្រអប់ស្វែងរក
+searchInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault(); // ការពារ Form Submit
+    employeeLoginButton.click(); // ធ្វើដូចការចុចប៊ូតុង
+  }
 });
 
-searchInput.addEventListener("blur", () => {
-  setTimeout(() => {
-    employeeListHeader.style.display = "flex";
-    employeeListHelpText.style.display = "block";
-    employeeListContent.style.paddingTop = "";
-    employeeListContainer.classList.add("hidden");
-  }, 200);
-});
+// --- *** ចប់ Event Listeners ថ្មី *** ---
 
 logoutButton.addEventListener("click", () => {
   showConfirmation(
@@ -1667,7 +1688,7 @@ modalConfirmButton.addEventListener("click", () => {
 
 cameraCloseButton.addEventListener("click", hideCameraModal);
 
-// --- ថ្មី: បន្ថែម Event Listener សម្រាប់ប៊ូតុងថត ត្រឡប់មកវិញ ---
+// បន្ថែម Event Listener សម្រាប់ប៊ូតុងថត ត្រឡប់មកវិញ
 captureButton.addEventListener("click", handleCaptureAndAnalyze);
 
 navHomeButton.addEventListener("click", () => {
